@@ -1,0 +1,6 @@
+:for x from 161 to 189 do={/queue simple add name="q1.$x" max-limit=5M/5M target="10.1.10.$x"}
+
+
+
+
+:for x from 10 to 199 do={/queue simple add name="q6.$x" max-limit=40M/40M target="10.1.6.$x"}

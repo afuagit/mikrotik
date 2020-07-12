@@ -1,0 +1,117 @@
+
+
+== WAN Failover Rules ==
+== DISABLES main connection, guest wifi, social websites 10 minutes and goes to LTE ==
+== in case of 10 minutes is a very short period, seconds can be increased in script + scheduler ==
+
+
+#DHCP - RUN EVERY 10 MINUTES
+:local WanName "WAN1-DHCP"
+:local HostPing "8.8.8.8"
+:local PingCount "59"
+:local WanState
+:interface ethernet monitor $WanName once do={ :set WanState $status}
+:local pingresult [/ping $HostPing interface=$WanName count=$PingCount]
+:if ($WanState = "link-ok")  do={
+	:if ($pingresult < 30) do={
+		:log info message="WAN 1 Ping is bad" 
+		:ip dhcp-client disable numbers=0
+        /ip firewall filter enable [find comment~"social_block *"]
+		:interface disable wlan-guest
+		:delay 480
+		:ip dhcp-client enable numbers=0
+        /ip firewall filter disable [find comment~"social_block *"]
+		:interface enable wlan-guest
+	}
+	:if ($pingresult = 59) do={
+			:log info message="<$WanName> is working normally"
+	}
+}
+:if ($WanState != "link-ok")  do={
+		:log info message="<$WanName> is having problems"
+		:interface disable $WanName
+		:delay 480		
+		:interface enable $WanName
+	}
+}
+
+
+
+
+#PPPOE - RUN EVERY 10 MINUTES
+:local WanName "pppoe"
+:local HostPing "8.8.8.8"
+:local PingCount "50"
+:local WanState
+:interface pppoe-client monitor $WanName once do={ :set WanState $status}
+:local pingresult [/ping $HostPing interface=$WanName count=$PingCount]
+:if ($WanState = "connected")  do={
+	:if ($pingresult < 20) do={
+		:log info message="pppoe 1 Ping is bad" 
+		:interface disable $WanName
+		/ip firewall filter enable [find comment~"social_block *"]
+		:interface disable wlan-guest
+		:delay 480
+		:interface enable $WanName
+		/ip firewall filter disable [find comment~"social_block *"]
+		:interface enable wlan-guest
+	}
+	:if ($pingresult = 50) do={
+			:log info message="<$WanName> is working normally"
+	}
+}
+:if ($WanState != "connected")  do={
+		:log info message="<$WanName> is having problems"
+		:interface disable $WanName
+		:delay 480		
+		:interface enable $WanName
+	}
+}
+
+
+#STATIC - RUN EVERY 10 MINUTES
+:local WanName "WAN2-STATIC"
+:local HostPing "8.8.8.8"
+:local PingCount "50"
+:local WanState
+:interface ethernet monitor $WanName once do={ :set WanState $status}
+:local pingresult [/ping $HostPing interface=$WanName count=$PingCount]
+:if ($WanState = "link-ok")  do={
+	:if ($pingresult < 20) do={
+		:log info message="pppoe 1 Ping is bad" 
+		:interface disable $WanName
+		/ip firewall filter enable [find comment~"social_block *"]
+		:interface disable wlan-guest		
+		:delay 480
+		:interface enable $WanName
+		/ip firewall filter disable [find comment~"social_block *"]
+		:interface enable wlan-guest
+	}
+	:if ($pingresult = 50) do={
+			:log info message="<$WanName> is working normally"
+	}
+}
+:if ($WanState != "link-ok")  do={
+		:log info message="<$WanName> is having problems"
+		:interface disable $WanName
+		:delay 480	
+		:interface enable $WanName
+	}
+}
+
+== FIREWALL RULES: ==
+
+/ip firewall layer7-protocol
+
+add name=Layer7-youtube regexp="^.+(youtube.com|www.youtube.com|m.youtube.com|\
+    youtu.be|netflix.com|www.netflix.com|www.vimeo.com|vimeo.com|facebook.com|\
+    fb.me|instagram.com).*\$"
+add name=youtube regexp=\
+    "get /videoplayback[\\x09-\\x0d -~]* http/[01]\\.[019]"
+
+/ip firewall filter
+
+add action=drop chain=forward comment=social_block disabled=yes in-interface=\
+    bridge layer7-protocol=Layer7-youtube
+add action=drop chain=forward comment=social_block disabled=yes in-interface=\
+    bridge layer7-protocol=youtube
